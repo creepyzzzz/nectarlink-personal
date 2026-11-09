@@ -732,7 +732,7 @@ pub(crate) async fn probe_after_network_change(shared: &Arc<Shared>, session: &A
     }
     if !shared.is_connection_allowed(&session.conn) {
         tracing::info!(peer = %session.peer.short(), "closing non-LAN session after network change");
-        session.close(CLOSE_NORMAL, b"away mode disabled");
+        session.close(CLOSE_NORMAL, b"non-LAN path refused");
         return;
     }
     let probe_start = Instant::now();
@@ -753,7 +753,7 @@ async fn heartbeat(session: &Arc<Session>, shared: &Weak<Shared>) {
             && !shared_arc.is_connection_allowed(&session.conn)
         {
             tracing::info!(peer = %session.peer.short(), "closing session on disallowed non-LAN path");
-            session.close(CLOSE_NORMAL, b"away mode disabled");
+            session.close(CLOSE_NORMAL, b"non-LAN path refused");
             return;
         }
         let sent_at = Instant::now();

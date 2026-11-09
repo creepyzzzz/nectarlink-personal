@@ -11,7 +11,7 @@ use std::{
 
 use iroh::{
     Endpoint, EndpointAddr, RelayMode,
-    address_lookup::{DnsAddressLookup, MemoryLookup, PkarrPublisher, PkarrResolver},
+    address_lookup::MemoryLookup,
     endpoint::{Connection, PortmapperConfig, QuicTransportConfig, VarInt, presets},
     endpoint_info::{EndpointInfo, UserData},
     protocol::{AcceptError, ProtocolHandler, Router},
@@ -171,7 +171,6 @@ pub(crate) struct Shared {
     dial_failures: Mutex<HashMap<DeviceId, u32>>,
     /// The last capability matrix emitted per device, to emit only changes.
     matrices: Mutex<HashMap<DeviceId, CapabilityMatrix>>,
-    pub(crate) away_mode: std::sync::atomic::AtomicBool,
     memory: MemoryLookup,
     /// This device's notifications, when it mirrors them (phones).
     pub notifications: Feed,
@@ -239,8 +238,6 @@ pub(crate) struct Shared {
     transfers: Mutex<HashMap<String, TransferControl>>,
     /// The node's runtime, for work started from non-async callers.
     pub(crate) runtime: tokio::runtime::Handle,
-    /// One Away mode change at a time.
-    away_switch: tokio::sync::Mutex<()>,
 }
 
 /// How long a receiver's resume that overtook its pause still counts: the
@@ -680,12 +677,8 @@ impl Shared {
         }
     }
 
-    pub fn away_mode(&self) -> bool {
-        self.away_mode.load(std::sync::atomic::Ordering::Relaxed)
-    }
-
     pub(crate) fn is_allowed_peer_ip(&self, peer: &DeviceId, ip: std::net::IpAddr) -> bool {
-        self.away_mode() || self.is_lan_peer_ip(peer, ip)
+        self.is_lan_peer_ip(peer, ip)
     }
 
     /// Whether `ip` reaches `peer` on this network (`session::is_lan_peer_ip`),
@@ -698,7 +691,7 @@ impl Shared {
     }
 
     pub(crate) fn is_connection_allowed(&self, conn: &Connection) -> bool {
-        if self.away_mode() || self.is_usb_connection(conn) {
+        if self.is_usb_connection(conn) {
             return true;
         }
         // Any direct LAN (or USB) path will do: a connection often reports its
@@ -716,7 +709,7 @@ impl Shared {
     }
 
     pub(crate) async fn wait_connection_allowed(&self, conn: &Connection) -> bool {
-        if self.away_mode() || self.is_usb_connection(conn) {
+        if self.is_usb_connection(conn) {
             return true;
         }
         // Up to 200 ms for a direct path, not just for the first path of any kind.
@@ -741,7 +734,7 @@ impl Shared {
                 .addr()
                 .ip_addrs()
                 .copied()
-                .filter(|a| self.away_mode() || crate::session::is_lan_ip(a.ip()))
+                .filter(|a| crate::session::is_lan_ip(a.ip()))
                 .collect();
             if addrs.iter().any(|a| !a.ip().is_loopback()) || tokio::time::Instant::now() >= deadline {
                 if !addrs.is_empty() {
@@ -926,7 +919,6 @@ impl Shared {
 
     /// Feeds known addresses of a peer into address lookup.
     pub fn remember_addrs(&self, peer: &DeviceId, addrs: &[SocketAddr]) {
-        let allow_wan = self.away_mode();
         let mut all: Vec<SocketAddr> = addrs
             .iter()
             .copied()
@@ -936,7 +928,7 @@ impl Shared {
                 } else if a.ip().is_loopback() {
                     false
                 } else {
-                    allow_wan || self.is_lan_peer_ip(peer, a.ip())
+                    self.is_lan_peer_ip(peer, a.ip())
                 }
             })
             .collect();
@@ -944,9 +936,6 @@ impl Shared {
             && !all.contains(&usb_addr)
         {
             all.push(usb_addr);
-        }
-        if all.is_empty() && allow_wan {
-            return;
         }
         if let Ok(key) = crate::public_key(peer) {
             self.memory.add_endpoint_info(EndpointInfo::new(key).with_ip_addrs(all));
@@ -987,9 +976,6 @@ impl Shared {
             || self.session(peer).is_some_and(|s| s.path() == ConnectionPath::Usb)
         {
             paths.push(ConnectionPath::Usb);
-        }
-        if self.away_mode() {
-            paths.push(ConnectionPath::Relay);
         }
         Ok(features::compute(
             *peer,
@@ -1162,8 +1148,8 @@ impl Shared {
             return None;
         }
         if !self.is_connection_allowed(&conn) {
-            tracing::debug!(peer = %peer.short(), "refusing session on non-LAN path while away_mode is off");
-            conn.close(VarInt::from_u32(CLOSE_NORMAL), b"away mode disabled");
+            tracing::debug!(peer = %peer.short(), "refusing session on non-LAN path (LAN only)");
+            conn.close(VarInt::from_u32(CLOSE_NORMAL), b"non-LAN path refused");
             return None;
         }
         // Unpaired while the handshake ran (both sides check before it).
@@ -1223,12 +1209,11 @@ impl Shared {
         lock(&self.dial_failures).remove(&peer);
 
         tracing::info!(peer = %peer.short(), path = ?session.path(), "connected");
-        let allow_wan = self.away_mode();
         let addrs: Vec<SocketAddr> = session
             .remote_ip_addrs()
             .into_iter()
             .filter(|a| {
-                !a.ip().to_canonical().is_loopback() && (allow_wan || self.is_lan_peer_ip(&peer, a.ip()))
+                !a.ip().to_canonical().is_loopback() && self.is_lan_peer_ip(&peer, a.ip())
             })
             .collect();
         let persisted_addrs = if addrs.is_empty() {
@@ -1241,7 +1226,7 @@ impl Shared {
                         .into_iter()
                         .filter(|a| {
                             !a.ip().to_canonical().is_loopback()
-                                && (allow_wan || self.is_lan_peer_ip(&peer, a.ip()))
+                                && self.is_lan_peer_ip(&peer, a.ip())
                         })
                         .collect()
                 })
@@ -1348,9 +1333,9 @@ impl Shared {
         let mut guard = CloseOnDrop(Some(conn));
         let conn_ref = guard.0.as_ref().expect("connection present");
         if !self.wait_connection_allowed(conn_ref).await {
-            tracing::debug!(peer = %peer.short(), "refusing outgoing session on non-LAN path while away_mode is off");
+            tracing::debug!(peer = %peer.short(), "refusing outgoing session on non-LAN path (LAN only)");
             if let Some(c) = guard.0.take() {
-                c.close(VarInt::from_u32(CLOSE_NORMAL), b"away mode disabled");
+                c.close(VarInt::from_u32(CLOSE_NORMAL), b"non-LAN path refused");
             }
             return Err(Error::Offline);
         }
@@ -1540,8 +1525,8 @@ impl ProtocolHandler for SessionProtocol {
             return Err(AcceptError::from_err(Error::NotPaired));
         }
         if !shared.wait_connection_allowed(&conn).await {
-            tracing::debug!(peer = %peer.short(), "refusing incoming session on non-LAN path while away_mode is off");
-            conn.close(VarInt::from_u32(CLOSE_NORMAL), b"away mode disabled");
+            tracing::debug!(peer = %peer.short(), "refusing incoming session on non-LAN path (LAN only)");
+            conn.close(VarInt::from_u32(CLOSE_NORMAL), b"non-LAN path refused");
             return Err(AcceptError::from_err(Error::Offline));
         }
         let hello = session::local_hello(&shared);
@@ -1668,7 +1653,6 @@ impl Node {
             incoming_turns: Mutex::new(HashMap::new()),
             dial_failures: Mutex::new(HashMap::new()),
             matrices: Mutex::new(HashMap::new()),
-            away_mode: std::sync::atomic::AtomicBool::new(config.away_mode),
             memory,
             notifications: Feed::default(),
             notification_history: Mutex::new(Vec::new()),
@@ -1704,7 +1688,6 @@ impl Node {
             downloads_dir: config.downloads_dir.clone().unwrap_or_else(|| config.data_dir.join("received")),
             transfers: Mutex::new(HashMap::new()),
             runtime: tokio::runtime::Handle::current(),
-            away_switch: tokio::sync::Mutex::new(()),
         });
 
         if config.lan_discovery {
@@ -1736,46 +1719,10 @@ impl Node {
             shared.start_supervisor(peer.id);
         }
         run_queue_coordinator(Arc::downgrade(&shared), shared.cancel.child_token());
-        tracing::info!(device = %id.short(), lan = config.lan_discovery, away = config.away_mode, "node started");
+        tracing::info!(device = %id.short(), lan = config.lan_discovery, "node started");
         Ok(Node { shared, router: Arc::new(router) })
     }
 
-    /// Whether remote / mobile data connections outside the local Wi-Fi/LAN are allowed.
-    pub fn away_mode(&self) -> bool {
-        self.shared.away_mode()
-    }
-
-    /// Enables or disables connecting over mobile data / non-LAN paths at runtime.
-    pub fn set_away_mode(&self, enabled: bool) {
-        let was = self.shared.away_mode.swap(enabled, std::sync::atomic::Ordering::Relaxed);
-        if was != enabled {
-            let shared = self.shared.clone();
-            self.shared.runtime.spawn(async move { apply_internet_services(&shared).await });
-        }
-        if !enabled {
-            for session in self.shared.live_sessions() {
-                if !self.shared.is_connection_allowed(&session.conn) {
-                    tracing::info!(peer = %session.peer.short(), "closing non-LAN session after disabling away_mode");
-                    session.close(CLOSE_NORMAL, b"away mode disabled");
-                }
-            }
-            // Only what's dialled changes (remember_addrs keeps LAN addresses
-            // now); the stored list keeps the others for turning it back on.
-            if let Ok(peers) = self.shared.store.list_peers() {
-                for peer in peers {
-                    self.shared.remember_addrs(&peer.id, &peer.last_addrs);
-                }
-            }
-        } else {
-            if let Ok(peers) = self.shared.store.list_peers() {
-                for peer in peers {
-                    self.shared.remember_addrs(&peer.id, &peer.last_addrs);
-                }
-            }
-            self.shared.nudge_reconnect();
-        }
-        self.shared.refresh_all_capabilities();
-    }
 
     /// Stops all sessions and networking.
     pub async fn shutdown(&self) {
@@ -4105,88 +4052,20 @@ async fn bind_endpoint(
         .secret_key(secret)
         .alpns(vec![ALPN_SESSION.to_vec(), ALPN_PAIR.to_vec()])
         .transport_config(transport);
-    builder = if config.away_mode {
-        builder.relay_mode(RelayMode::Default)
-    } else {
-        // LAN only: no relays, nothing published outside the network, and no
-        // asking the router to open ports (UPnP, NAT-PMP, PCP) every few seconds.
-        // An empty relay map rather than none, so turning Away on later has a
-        // relay transport to fill: without one, only a restart could add relays.
-        builder
-            .relay_mode(RelayMode::Custom(iroh::RelayMap::empty()))
-            .portmapper_config(PortmapperConfig::Disabled)
-    };
-    if !config.away_mode {
-        let v4_port = ports.map_or(0, |p| p.v4);
-        builder = builder
-            .clear_ip_transports()
-            .bind_addr(SocketAddr::from(([0, 0, 0, 0], v4_port)))
-            .map_err(crate::error::net)?;
-    } else if let Some(ports) = ports {
-        builder = builder
-            .clear_ip_transports()
-            .bind_addr(SocketAddr::from(([0, 0, 0, 0], ports.v4)))
-            .map_err(crate::error::net)?;
-        if let Some(v6) = ports.v6 {
-            builder = builder.bind_addr(SocketAddr::from(([0u16; 8], v6))).map_err(crate::error::net)?;
-        }
-    }
+    // LAN only, unconditionally: no relays, nothing published outside the
+    // network, and no asking the router to open ports (UPnP, NAT-PMP, PCP).
+    builder = builder
+        .relay_mode(RelayMode::Custom(iroh::RelayMap::empty()))
+        .portmapper_config(PortmapperConfig::Disabled);
+    let v4_port = ports.map_or(0, |p| p.v4);
+    builder = builder
+        .clear_ip_transports()
+        .bind_addr(SocketAddr::from(([0, 0, 0, 0], v4_port)))
+        .map_err(crate::error::net)?;
     let endpoint = builder.bind().await.map_err(crate::error::net)?;
-    if config.away_mode {
-        add_internet_lookups(&endpoint)?;
-    }
     Ok(endpoint)
 }
 
-/// Brings relays and internet lookups in line with Away mode, while running.
-/// Off, nothing is published or looked up and no relay is picked or used. iroh
-/// keeps its idle connection to the current home relay until the endpoint
-/// closes (`handle_net_report_report` holds on to it), which needs a restart.
-async fn apply_internet_services(shared: &Arc<Shared>) {
-    let _one_at_a_time = shared.away_switch.lock().await;
-    let on = shared.away_mode();
-    let relays = RelayMode::Default.relay_map();
-    let urls: Vec<iroh::RelayUrl> = relays.urls();
-    for url in urls {
-        if on {
-            if let Some(config) = relays.get(&url) {
-                shared.endpoint.insert_relay(url, config).await;
-            }
-        } else {
-            shared.endpoint.remove_relay(&url).await;
-        }
-    }
-    let running = lock(&shared.lan_discovery).as_ref().map(|(_, fast)| *fast);
-    let lookups = match running {
-        // Swapping mDNS clears the lookups and puts back what Away mode allows.
-        Some(fast) => install_mdns(shared, fast),
-        None => shared.endpoint.address_lookup().map_err(crate::error::net).and_then(|lookups| {
-            lookups.clear();
-            lookups.add(shared.memory.clone());
-            if on { add_internet_lookups(&shared.endpoint) } else { Ok(()) }
-        }),
-    };
-    if let Err(e) = lookups {
-        tracing::warn!(error = %e, "can't update address lookups");
-    }
-    shared.endpoint.network_change().await;
-    tracing::info!(on, "internet services updated");
-    if on {
-        shared.nudge_reconnect();
-    }
-}
-
-/// Publishes this device's addresses without the name that LAN discovery
-/// announces: on the LAN it's for nearby pairing, and nothing on the internet
-/// needs it.
-#[derive(Debug)]
-struct WithoutName<T>(T);
-
-impl<T: iroh::address_lookup::AddressLookup> iroh::address_lookup::AddressLookup for WithoutName<T> {
-    fn publish(&self, data: &iroh::address_lookup::EndpointData) {
-        self.0.publish(&iroh::address_lookup::EndpointData::new(data.addrs().cloned().collect()));
-    }
-}
 
 /// Announces this device on the LAN and watches for others.
 fn start_lan_discovery(shared: &Arc<Shared>, name: &str) -> Result<()> {
@@ -4224,9 +4103,6 @@ fn install_mdns(shared: &Arc<Shared>, fast: bool) -> Result<()> {
         old.cancel();
         lookups.clear();
         lookups.add(shared.memory.clone());
-        if shared.away_mode() {
-            add_internet_lookups(&shared.endpoint)?;
-        }
         // A nearby list just opened: start it fresh rather than keep what the
         // old mDNS saw, which will never expire now.
         if fast {
@@ -4287,18 +4163,6 @@ fn is_mdns_interface(ip: std::net::Ipv4Addr) -> bool {
         && !ip.is_link_local()
         && !ip.is_unspecified()
         && !crate::session::is_tailnet_ip(std::net::IpAddr::V4(ip))
-}
-
-/// The internet lookups away mode uses, the same ones `bind_endpoint` sets
-/// up, for putting back after `install_mdns` clears them.
-fn add_internet_lookups(endpoint: &Endpoint) -> Result<()> {
-    use iroh::address_lookup::AddressLookupBuilder;
-    let lookups = endpoint.address_lookup().map_err(crate::error::net)?;
-    lookups
-        .add(WithoutName(PkarrPublisher::n0_dns().into_address_lookup(endpoint).map_err(crate::error::net)?));
-    lookups.add(PkarrResolver::n0_dns().into_address_lookup(endpoint).map_err(crate::error::net)?);
-    lookups.add(DnsAddressLookup::n0_dns().into_address_lookup(endpoint).map_err(crate::error::net)?);
-    Ok(())
 }
 
 struct ActivePeerQueueGuard {
@@ -4551,7 +4415,7 @@ mod away_tests {
     use iroh::Watcher as _;
     use nectarlink_protocol::messages::{DeviceInfo, DeviceKind};
 
-    async fn node(dir: &tempfile::TempDir, away: bool) -> Node {
+    async fn node(dir: &tempfile::TempDir) -> Node {
         let mut config = NodeConfig::new(
             dir.path().to_path_buf(),
             DeviceInfo {
@@ -4567,89 +4431,14 @@ mod away_tests {
             "0.0.0-test",
         );
         config.lan_discovery = false;
-        config.away_mode = away;
         config.localsend_port = 0;
         Node::start(config, Arc::new(NoopPlatform)).await.unwrap()
-    }
-
-    fn lookups(node: &Node) -> usize {
-        node.shared.endpoint.address_lookup().unwrap().len()
-    }
-
-    fn relays(node: &Node) -> usize {
-        node.shared.endpoint.home_relay_status().get().len()
-    }
-
-    /// Waits for the switch, which runs in the background.
-    async fn settled(node: &Node) {
-        for _ in 0..200 {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            if node.shared.away_switch.try_lock().is_ok() {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                if node.shared.away_switch.try_lock().is_ok() {
-                    return;
-                }
-            }
-        }
-        panic!("the switch never finished");
-    }
-
-    #[tokio::test]
-    async fn turning_away_off_stops_internet_services_without_a_restart() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let node = node(&dir, true).await;
-        let with_away = lookups(&node);
-        assert!(with_away > 1, "started with internet lookups");
-
-        node.set_away_mode(false);
-        settled(&node).await;
-        assert_eq!(lookups(&node), 1, "only the in-memory lookup is left");
-        node.shutdown().await;
-    }
-
-    #[tokio::test]
-    async fn turning_away_on_starts_internet_services_without_a_restart() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let node = node(&dir, false).await;
-        assert_eq!(lookups(&node), 1, "LAN only: nothing but the in-memory lookup");
-        assert_eq!(relays(&node), 0);
-
-        node.set_away_mode(true);
-        settled(&node).await;
-        assert!(lookups(&node) > 1, "internet lookups are on");
-
-        node.set_away_mode(false);
-        settled(&node).await;
-        assert_eq!(lookups(&node), 1);
-        node.shutdown().await;
-    }
-
-    /// Needs the internet: `cargo test -p nectarlink-core --lib -- --ignored away_switch`.
-    #[tokio::test]
-    #[ignore = "reaches the real relays"]
-    async fn away_switch_reaches_a_real_relay_while_running() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let node = node(&dir, false).await;
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        assert_eq!(relays(&node), 0, "LAN only reaches no relay");
-
-        node.set_away_mode(true);
-        let mut connected = false;
-        for _ in 0..60 {
-            tokio::time::sleep(Duration::from_millis(500)).await;
-            connected = relays(&node) > 0;
-            if connected {
-                break;
-            }
-        }
-        assert!(connected, "turning it on while running reaches a relay");
-        node.shutdown().await;
     }
 
     #[tokio::test]
     async fn a_new_attempt_at_a_transfer_waits_for_the_old_one_to_stop() {
         let dir = tempfile::TempDir::new().unwrap();
-        let node = node(&dir, false).await;
+        let node = node(&dir).await;
         let shared = node.shared.clone();
 
         let first = shared.incoming_turn("t1").await;
@@ -4676,19 +4465,4 @@ mod away_tests {
         node.shutdown().await;
     }
 
-    #[test]
-    fn what_is_published_has_no_device_name() {
-        use iroh::address_lookup::{AddressLookup, EndpointData};
-        #[derive(Debug, Clone, Default)]
-        struct Seen(Arc<Mutex<Option<EndpointData>>>);
-        impl AddressLookup for Seen {
-            fn publish(&self, data: &EndpointData) {
-                *self.0.lock().unwrap() = Some(data.clone());
-            }
-        }
-        let seen = Seen::default();
-        let data = EndpointData::new(Vec::new()).with_user_data("Bee's phone".parse().unwrap());
-        WithoutName(seen.clone()).publish(&data);
-        assert!(seen.0.lock().unwrap().as_ref().unwrap().user_data().is_none());
-    }
 }

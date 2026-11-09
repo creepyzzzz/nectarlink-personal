@@ -37,9 +37,6 @@ struct Cli {
     /// Disable discovery on the local network (mDNS).
     #[arg(long, global = true)]
     no_lan: bool,
-    /// Allow connections through relay servers when away from home.
-    #[arg(long, global = true)]
-    away: bool,
     /// Announce this client as an Android phone, to test a PC without one.
     #[arg(long, global = true)]
     as_phone: bool,
@@ -2619,7 +2616,6 @@ async fn start_node(cli: &Cli) -> Result<Node> {
     config.usb_port = cli.usb_port;
     config.adb_server = cli.adb_server;
     config.lan_discovery = !cli.no_lan;
-    config.away_mode = cli.away;
     config.power = power;
     if cli.as_phone {
         let storage_root = cli.storage_root.clone().unwrap_or_else(|| data_dir.join("sample-storage"));

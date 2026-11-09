@@ -155,7 +155,6 @@ static NECTAR_ISLAND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicB
 static STREAM_PC_AUDIO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static SHARE_PC_STORAGE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static FORWARD_PC_NOTIFICATIONS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static AWAY_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static FLOW_FOLLOW_CLIPBOARD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 static MIRROR_QUALITY: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
 static SYNC_PASSWORDS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -258,18 +257,6 @@ pub fn flow_follow_clipboard() -> bool {
 
 pub fn set_flow_follow_clipboard(on: bool) {
     FLOW_FOLLOW_CLIPBOARD.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-
-#[allow(dead_code)]
-pub fn away_mode() -> bool {
-    AWAY_MODE.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-pub fn set_away_mode(on: bool) {
-    AWAY_MODE.store(on, std::sync::atomic::Ordering::Relaxed);
-    if let Some(node) = crate::core_host::node() {
-        node.set_away_mode(on);
-    }
 }
 
 static BATTERY_FULL_THRESHOLD: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(100);
@@ -599,9 +586,6 @@ pub struct Settings {
     /// Forward PC notifications to connected phones (privacy-first: off by default).
     #[serde(default, alias = "forward_pc_notifications_to_phone")]
     pub forward_pc_notifications_to_phone: bool,
-    /// Allow staying connected over mobile data (LTE/5G) / relay when away from Wi-Fi.
-    #[serde(default, alias = "away_mode")]
-    pub away_mode: bool,
     /// Whether the first-run setup walkthrough has been completed or skipped.
     #[serde(default, alias = "walkthrough_completed")]
     pub walkthrough_completed: bool,
@@ -718,7 +702,6 @@ impl Default for Settings {
             stream_pc_audio_to_phone: false,
             share_pc_storage: false,
             forward_pc_notifications_to_phone: false,
-            away_mode: false,
             walkthrough_completed: false,
             walkthrough_step: 0,
             whats_new_dismissed: false,
@@ -792,7 +775,6 @@ impl Settings {
         set_stream_pc_audio_to_phone(self.stream_pc_audio_to_phone);
         set_share_pc_storage(self.share_pc_storage);
         set_forward_pc_notifications_to_phone(self.forward_pc_notifications_to_phone);
-        set_away_mode(self.away_mode);
         set_battery_full_threshold(self.battery_full_threshold);
         set_keep_screen_off_phones(self.keep_screen_off.clone());
         set_device_nicknames(self.device_nicknames.clone());
@@ -993,7 +975,6 @@ mod tests {
             stream_pc_audio_to_phone: true,
             share_pc_storage: true,
             forward_pc_notifications_to_phone: true,
-            away_mode: true,
             walkthrough_completed: true,
             walkthrough_step: 4,
             whats_new_dismissed: true,

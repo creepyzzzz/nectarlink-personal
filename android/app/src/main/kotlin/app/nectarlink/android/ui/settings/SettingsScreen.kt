@@ -127,7 +127,6 @@ fun SettingsScreen(
     onClearReceivedFileHistory: () -> Unit = {},
     onClearEverything: () -> Unit = {},
     onToggleLocalSend: (Boolean) -> Unit = {},
-    onToggleAwayMode: (Boolean) -> Unit = {},
     onOpenWalkthrough: () -> Unit = {},
     onOpenFeaturesGuide: () -> Unit = {},
     highlightTarget: GuideHighlightTarget? = null,
@@ -581,23 +580,6 @@ fun SettingsScreen(
                     }
                     FilledTonalButton(onClick = onPairNew) { Text(stringResource(R.string.action_pair_new)) }
                     SettingRowDivider()
-                    val mobileDataTitle = stringResource(R.string.guide_away_title)
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                            Text(mobileDataTitle, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                stringResource(R.string.settings_mobile_data_body),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = state.awayMode,
-                            onCheckedChange = onToggleAwayMode,
-                            colors = app.nectarlink.android.ui.theme.nectarSwitchColors(),
-                            modifier = Modifier.semantics { contentDescription = mobileDataTitle },
-                        )
-                    }
                 }
             }
         }

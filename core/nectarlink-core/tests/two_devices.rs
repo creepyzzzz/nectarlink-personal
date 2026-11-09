@@ -695,7 +695,6 @@ async fn start_in(dir: TempDir, name: &'static str, kind: DeviceKind) -> TestDev
     let mut config = NodeConfig::new(dir.path(), info(name, kind), "0.0.1-test");
     config.private_clip_lifetime = Duration::from_millis(300);
     config.lan_discovery = false;
-    config.away_mode = false;
     config.key_protector = Some(Arc::new(PlainKeyProtector));
     config.capabilities = vec!["media.control".into()];
     let platform = Arc::new(RecordingPlatform::default());
@@ -4941,7 +4940,6 @@ async fn start_localsend_in(dir: TempDir, name: &'static str, kind: DeviceKind, 
     init_logging();
     let mut config = NodeConfig::new(dir.path(), info(name, kind), "0.0.1-test");
     config.lan_discovery = false;
-    config.away_mode = false;
     config.localsend_port = port;
     config.key_protector = Some(Arc::new(PlainKeyProtector));
     config.capabilities = vec!["media.control".into()];
@@ -5662,7 +5660,6 @@ async fn start_usb_device_in(
     init_logging();
     let mut config = NodeConfig::new(dir.path(), info(name, kind), "0.0.1-test");
     config.lan_discovery = false;
-    config.away_mode = false;
     config.usb_port = usb_port;
     config.adb_server = None;
     config.key_protector = Some(Arc::new(PlainKeyProtector));
@@ -7076,7 +7073,6 @@ async fn phone_with_install_id(name: &'static str, install_id: &str) -> TestDevi
     phone_info.install_id = Some(install_id.into());
     let mut config = NodeConfig::new(dir.path(), phone_info, "0.0.1-test");
     config.lan_discovery = false;
-    config.away_mode = false;
     config.key_protector = Some(Arc::new(PlainKeyProtector));
     config.capabilities = vec!["media.control".into()];
     let platform = Arc::new(RecordingPlatform::default());

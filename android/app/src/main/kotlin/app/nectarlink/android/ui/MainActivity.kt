@@ -968,7 +968,6 @@ private fun App(
                                     onClearReceivedFileHistory = core::clearReceivedFileHistory,
                                     onClearEverything = core::clearEverything,
                                     onToggleLocalSend = core::setLocalSendEnabled,
-                                    onToggleAwayMode = core::setAwayMode,
                                     onOpenWalkthrough = {
                                         preferences.updateWalkthrough { it.goToStep(WalkthroughStep.Welcome) }
                                         manualWalkthroughOpen = true

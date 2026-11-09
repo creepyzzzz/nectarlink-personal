@@ -288,7 +288,7 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
         val hasWifi = snapshot.wifiBars != null
         lastSignal = snapshot
         pushBatteryAndSignal()
-        if (hadWifi != hasWifi && (hasWifi || _state.value.awayMode)) {
+        if (hadWifi != hasWifi && hasWifi) {
             node?.let { scope.launch { runCatching { it.networkChanged() } } }
         }
     }
@@ -300,7 +300,7 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
         networkChange?.cancel()
         networkChange = scope.launch {
             delay(150)
-            if (lastSignal.wifiBars != null || _state.value.awayMode) {
+            if (lastSignal.wifiBars != null) {
                 node?.networkChanged()
             }
             // A new Wi-Fi network turns wireless debugging off; Elevated turns it back on.
@@ -408,13 +408,11 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
                 runScope = currentRunScope
                 val job = currentRunScope.launch(Dispatchers.IO) {
             initLogging(if (BuildConfig.DEBUG) "debug,iroh=info,swarm_discovery=error" else "info,iroh=warn,swarm_discovery=error")
-            val initialAwayMode = app.nectarlink.android.ui.Preferences.isAwayModeEnabled(context)
             val options = NodeOptions(
                 dataDir = context.noBackupFilesDir.resolve("core").absolutePath,
                 device = deviceInfo(context),
                 appVersion = BuildConfig.VERSION_NAME,
                 power = PowerLevel.BASIC,
-                awayMode = initialAwayMode,
                 downloadsDir = context.cacheDir.resolve("received").absolutePath,
                 usbPort = 53319u.toUShort(),
             )
@@ -463,8 +461,7 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
                     timelineHasMore = tlPage?.hasMore ?: false,
                     timelineRetentionDays = retention?.maxDays ?: 90u,
                     localsendEnabled = lsEnabled,
-                    awayMode = initialAwayMode,
-                    localsendPeers = lsPeers,
+                        localsendPeers = lsPeers,
                 )
             }
             NotificationListener.instance?.refreshActive()
@@ -1430,16 +1427,7 @@ class Core(context: Context, private val scope: CoroutineScope) : EventListener 
         )
     }
 
-    // ---- LocalSend interop & Mobile Data (Away mode) ----
-
-    fun setAwayMode(enabled: Boolean) {
-        app.nectarlink.android.ui.Preferences.setAwayModeEnabled(context, enabled)
-        _state.update { it.copy(awayMode = enabled) }
-        scope.launch(Dispatchers.IO) {
-            startJob?.join()
-            runCatching { node?.setAwayMode(enabled) }
-        }
-    }
+    // ---- LocalSend interop ----
 
     fun setLocalSendEnabled(enabled: Boolean) {
         scope.launch(Dispatchers.IO) {

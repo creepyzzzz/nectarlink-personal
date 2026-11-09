@@ -1080,44 +1080,6 @@ object FeaturesGuideCatalog {
             },
         ),
 
-        // 27. Connect over mobile data
-        FeatureGuideEntry(
-            id = "away_mode_and_usb",
-            area = FeatureArea.PowerNetwork,
-            titleRes = R.string.guide_away_title,
-            summaryRes = R.string.guide_away_summary,
-            keywords = listOf("connect over mobile data", "mobile data", "lte", "5g", "relay", "usb", "tethering", "adb", "network"),
-            whereTextRes = R.string.guide_away_where,
-            showMeTarget = GuideHighlightTarget.SETTINGS_DEVICES,
-            needsSummaryRes = R.string.guide_away_needs,
-            whatYouNeedResIds = listOf(
-                R.string.guide_away_need_1,
-                R.string.guide_away_need_2,
-            ),
-            stepByStepPhoneResIds = listOf(
-                R.string.guide_away_phone_1,
-            ),
-            stepByStepPcResIds = listOf(
-                R.string.guide_away_pc_1,
-            ),
-            optionsExplainedResIds = listOf(
-                R.string.guide_away_opt_1,
-            ),
-            dataAndPrivacyRes = R.string.guide_away_privacy,
-            limitsRes = R.string.guide_away_limits,
-            evaluateBadge = { state ->
-                if (!state.backgroundUnrestricted) {
-                    FeatureLiveBadge.NeedsPermission(R.string.guide_req_unrestricted_battery)
-                } else if (state.devices.none { it.online }) {
-                    FeatureLiveBadge.ConnectPcToCheck
-                } else {
-                    FeatureLiveBadge.Available
-                }
-            },
-            evaluateFixAction = { state ->
-                if (!state.backgroundUnrestricted) GuideFixAction.GRANT_BATTERY else null
-            },
-        ),
 
         // 28. Connection Doctor
         FeatureGuideEntry(

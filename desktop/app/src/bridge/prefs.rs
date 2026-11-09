@@ -127,8 +127,6 @@ pub mod qobject {
         #[qproperty(bool, share_pc_storage)]
         /// Forward PC notifications to connected phones (opt-in privacy toggle).
         #[qproperty(bool, forward_pc_notifications_to_phone)]
-        /// Stay connected over mobile data (LTE/5G) or relay when away from Wi-Fi.
-        #[qproperty(bool, away_mode)]
         /// Alias for `start_with_windows` used by the walkthrough and settings bindings.
         #[qproperty(bool, start_at_login)]
         /// Whether the first-run setup walkthrough has been completed or skipped.
@@ -360,7 +358,6 @@ pub struct PreferencesRust {
     stream_pc_audio_to_phone: bool,
     share_pc_storage: bool,
     forward_pc_notifications_to_phone: bool,
-    away_mode: bool,
     start_at_login: bool,
     walkthrough_completed: bool,
     walkthrough_step: i32,
@@ -457,7 +454,6 @@ impl cxx_qt::Initialize for qobject::Preferences {
         self.as_mut().set_stream_pc_audio_to_phone(settings.stream_pc_audio_to_phone);
         self.as_mut().set_share_pc_storage(settings.share_pc_storage);
         self.as_mut().set_forward_pc_notifications_to_phone(settings.forward_pc_notifications_to_phone);
-        self.as_mut().set_away_mode(settings.away_mode);
         self.as_mut().set_walkthrough_completed(settings.walkthrough_completed);
         self.as_mut().set_walkthrough_step(i32::from(settings.walkthrough_step.min(6)));
         self.as_mut().set_whats_new_dismissed(settings.whats_new_dismissed);
@@ -753,12 +749,6 @@ impl cxx_qt::Initialize for qobject::Preferences {
         self.as_mut()
             .on_forward_pc_notifications_to_phone_changed(|p| {
                 crate::settings::set_forward_pc_notifications_to_phone(p.forward_pc_notifications_to_phone);
-                p.save();
-            })
-            .release();
-        self.as_mut()
-            .on_away_mode_changed(|p| {
-                crate::settings::set_away_mode(p.away_mode);
                 p.save();
             })
             .release();
@@ -1140,7 +1130,6 @@ impl qobject::Preferences {
             stream_pc_audio_to_phone: p.stream_pc_audio_to_phone,
             share_pc_storage: p.share_pc_storage,
             forward_pc_notifications_to_phone: p.forward_pc_notifications_to_phone,
-            away_mode: p.away_mode,
             walkthrough_completed: p.walkthrough_completed,
             walkthrough_step: p.walkthrough_step.clamp(0, 6) as u8,
             whats_new_dismissed: p.whats_new_dismissed,

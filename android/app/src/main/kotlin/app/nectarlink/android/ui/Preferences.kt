@@ -149,7 +149,6 @@ class Preferences(context: Context) {
         private const val SUGGEST_CLIPBOARD_ACTIONS = "suggest_clipboard_actions"
         private const val VOLUME_KEYS_CONTROL_PC = "volume_keys_control_pc"
         internal const val BACKGROUND_SERVICE_ENABLED = "background_service_enabled"
-        private const val AWAY_MODE = "away_mode"
         private const val WALKTHROUGH_COMPLETED = "walkthrough_completed"
         private const val WALKTHROUGH_STEP = "walkthrough_step"
         private const val WHATS_NEW_GUIDE_DISMISSED = "whats_new_guide_dismissed"
@@ -199,16 +198,6 @@ class Preferences(context: Context) {
                 .getSharedPreferences("appearance", Context.MODE_PRIVATE)
                 .getBoolean(VOLUME_KEYS_CONTROL_PC, true)
 
-        fun isAwayModeEnabled(context: Context): Boolean =
-            context.applicationContext
-                .getSharedPreferences("appearance", Context.MODE_PRIVATE)
-                .getBoolean(AWAY_MODE, false)
-
-        fun setAwayModeEnabled(context: Context, enabled: Boolean) {
-            context.applicationContext
-                .getSharedPreferences("appearance", Context.MODE_PRIVATE)
-                .edit { putBoolean(AWAY_MODE, enabled) }
-        }
 
         fun isBackgroundServiceEnabled(context: Context): Boolean =
             context.applicationContext

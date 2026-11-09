@@ -17,9 +17,6 @@ pub struct NodeConfig {
     pub app_version: String,
     /// This device's power level (phones) or [`PowerLevel::NotApplicable`].
     pub power: PowerLevel,
-    /// Allow connections through relay servers ("Reach my phone away from
-    /// home"). Off by default: LAN only.
-    pub away_mode: bool,
     /// Discover and announce on the local network via mDNS.
     pub lan_discovery: bool,
     /// Fixed UDP port to listen on (0 = any). A fixed port makes firewall
@@ -131,7 +128,6 @@ impl NodeConfig {
             device,
             app_version: app_version.into(),
             power: PowerLevel::NotApplicable,
-            away_mode: false,
             lan_discovery: true,
             port: 0,
             key_protector: None,
@@ -153,7 +149,6 @@ impl fmt::Debug for NodeConfig {
             .field("device", &self.device)
             .field("app_version", &self.app_version)
             .field("power", &self.power)
-            .field("away_mode", &self.away_mode)
             .field("lan_discovery", &self.lan_discovery)
             .field("port", &self.port)
             .field("localsend_port", &self.localsend_port)

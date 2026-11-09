@@ -3259,8 +3259,6 @@ pub struct NodeOptions {
     pub device: DeviceInfo,
     pub app_version: String,
     pub power: PowerLevel,
-    /// Allow connections through relays when away from home.
-    pub away_mode: bool,
     /// Where received files are put once complete (the app then moves them
     /// where the user finds them).
     pub downloads_dir: String,
@@ -3323,7 +3321,6 @@ impl NectarlinkNode {
         let mut config =
             NodeConfig::new(PathBuf::from(options.data_dir), options.device.into(), options.app_version);
         config.power = options.power.into();
-        config.away_mode = options.away_mode;
         config.downloads_dir = Some(PathBuf::from(options.downloads_dir));
         config.usb_port = options.usb_port;
         config.key_protector = Some(Arc::new(KeyProtectorAdapter(key_protector)));
@@ -3901,14 +3898,8 @@ impl NectarlinkNode {
     }
 
     /// Whether remote / mobile data connections outside the local Wi-Fi/LAN are allowed.
-    pub fn away_mode(&self) -> bool {
-        self.node.away_mode()
-    }
 
     /// Enables or disables connecting over mobile data / non-LAN paths at runtime.
-    pub fn set_away_mode(&self, enabled: bool) {
-        self.node.set_away_mode(enabled);
-    }
 
     /// Locks a paired PC (`sleep`: puts it to sleep instead).
     pub async fn pc_power(&self, id: String, sleep: bool) -> Result<()> {

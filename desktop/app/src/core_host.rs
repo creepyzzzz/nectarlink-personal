@@ -208,7 +208,6 @@ async fn run(data_dir: PathBuf, platform: Arc<dyn Platform>) {
         std::env::var("NECTARLINK_ADB_ONLY_SERIAL").is_ok_and(|s| s.trim().starts_with("emulator-"));
     let adb_disabled = !only_emulator && std::env::var_os("NECTARLINK_NO_ADB").is_some_and(|v| v == "1");
     config.adb_server = (!adb_disabled).then_some(nectarlink_core::DEFAULT_ADB_ADDR);
-    config.away_mode = crate::settings::Settings::load(&data_dir).away_mode;
     // This PC's own players, for phones (crate::win::media_sessions).
     config.capabilities = compute_capabilities(None);
     let initial_caps = config.capabilities.clone();

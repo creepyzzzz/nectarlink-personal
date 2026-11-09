@@ -244,8 +244,6 @@ data class CoreState(
     val cachedMmsFiles: Int = 0,
     /** Whether LocalSend LAN interop is enabled (off by default). */
     val localsendEnabled: Boolean = false,
-    /** Whether staying connected over mobile data (LTE/5G) or relay when away from Wi-Fi is enabled. */
-    val awayMode: Boolean = false,
     /** Nearby LocalSend devices discovered on the LAN. */
     val localsendPeers: List<LocalSendPeer> = emptyList(),
     /** IDs of paired PCs currently typing on this phone without mirroring. */
