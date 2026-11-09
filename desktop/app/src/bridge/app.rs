@@ -77,17 +77,6 @@ pub mod qobject {
         #[qproperty(QString, doctor_checks)]
         /// Checking, or fixing.
         #[qproperty(bool, doctor_busy)]
-        /// This copy updates itself (it's installed).
-        #[qproperty(bool, can_update)]
-        /// A newer version that's available ("" when none).
-        #[qproperty(QString, update_version)]
-        /// Checking for or installing an update.
-        #[qproperty(bool, update_busy)]
-        /// How far the update's download is, 0 to 1 (-1: not downloading,
-        /// or the size isn't known yet).
-        #[qproperty(f64, update_progress)]
-        /// What the update is doing, for Settings ("" when idle).
-        #[qproperty(QString, update_status)]
         /// Device ID and name of a phone asking to control this PC for the
         /// first time while `remote_input` is off ("" when none).
         #[qproperty(QString, remote_prompt_device_id)]
@@ -337,13 +326,6 @@ pub mod qobject {
         #[qinvokable]
         fn doctor_fix(self: Pin<&mut AppController>, fix: &QString);
 
-        /// Checks for an update now and says what it found.
-        #[qinvokable]
-        fn check_for_updates(self: Pin<&mut AppController>);
-        /// Downloads and installs the update found.
-        #[qinvokable]
-        fn install_update(self: Pin<&mut AppController>);
-
         /// The folder with the app's logs, as a file URL.
         #[qinvokable]
         fn logs_url(self: &AppController) -> QString;
@@ -448,11 +430,6 @@ pub struct AppControllerRust {
     version: QString,
     doctor_checks: QString,
     doctor_busy: bool,
-    can_update: bool,
-    update_version: QString,
-    update_busy: bool,
-    update_progress: f64,
-    update_status: QString,
     remote_prompt_device_id: QString,
     remote_prompt_device_name: QString,
     pc_mirror_prompt_device_id: QString,
@@ -527,64 +504,6 @@ pub fn toggle_shelf_from_anywhere() {
     if let Some(qt) = controller() {
         let _ = qt.queue(|object| object.toggle_shelf());
     }
-}
-
-/// Downloads and starts the update (from the app or its notification),
-/// showing how far the download is. The app quits for the installer only
-/// once the download is checked; until then it keeps working.
-pub fn install_update_in_background() {
-    let Some(qt) = controller() else { return };
-    let started = qt.queue(|mut object| {
-        if object.update_busy {
-            return;
-        }
-        object.as_mut().set_update_busy(true);
-        object.as_mut().set_update_progress(-1.0);
-        object.as_mut().set_update_status(QString::from("Downloading the update…"));
-        let qt = object.qt_thread();
-        std::thread::spawn(move || {
-            let progress_qt = qt.clone();
-            // A panic would leave the update busy until a restart: it's a failure.
-            let result = std::panic::catch_unwind(move || {
-                crate::updater::install(move |done, total| {
-                    let fraction =
-                        if total > 0 { (done as f64 / total as f64).clamp(0.0, 1.0) } else { -1.0 };
-                    let text = if total > 0 {
-                        tr!("App", "Downloading the update · %1 of %2", megabytes(done), megabytes(total))
-                    } else {
-                        tr!("App", "Downloading the update…")
-                    };
-                    let _ = progress_qt.queue(move |mut object| {
-                        object.as_mut().set_update_progress(fraction);
-                        object.as_mut().set_update_status(QString::from(&text));
-                    });
-                })
-            })
-            .unwrap_or_else(|_| Err(tr!("App", "The update couldn't be installed. Try again.")));
-            let _ = qt.queue(move |mut object| match result {
-                Ok(()) => {
-                    object.as_mut().set_update_progress(-1.0);
-                    object
-                        .as_mut()
-                        .set_update_status(QString::from("Installing. NectarLink reopens by itself."));
-                }
-                Err(message) => {
-                    object.as_mut().set_update_busy(false);
-                    object.as_mut().set_update_progress(-1.0);
-                    object.as_mut().set_update_status(QString::default());
-                    object.toast(QString::from(&message));
-                }
-            });
-        });
-    });
-    if started.is_err() {
-        tracing::warn!("can't start the update");
-    }
-}
-
-/// `12.3 MB`, for download progress.
-fn megabytes(bytes: u64) -> String {
-    format!("{:.1} MB", bytes as f64 / 1_000_000.0)
 }
 
 /// Runs a Doctor fix (if any), then the checks, off the UI thread; the
@@ -765,9 +684,6 @@ impl cxx_qt::Initialize for qobject::AppController {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().set_version(QString::from(env!("CARGO_PKG_VERSION")));
         self.as_mut().set_current_page(QString::from("home"));
-        self.as_mut().set_can_update(crate::updater::can_update());
-        // Nothing downloading yet (0 would show an empty bar).
-        self.as_mut().set_update_progress(-1.0);
         self.as_mut().set_clipboard_history(QString::from(&crate::clipboard::history_json()));
         self.as_mut().set_timeline_preview(QString::from(&super::timeline::preview_json()));
         self.as_mut().set_command_palette_results(QString::from("[]"));
@@ -808,11 +724,6 @@ impl cxx_qt::Initialize for qobject::AppController {
                 | Changes::QUEUE,
             Self::refresh,
         );
-        super::subscribe(qt.clone(), Changes::UPDATE, |object| {
-            // Its name for people: "0.1.5", or "Nightly 7 (Amber Clover)".
-            let version = crate::updater::available().map(|u| u.title()).unwrap_or_default();
-            object.set_update_version(QString::from(&version));
-        });
         super::subscribe(qt.clone(), Changes::CLIPBOARD, |mut object| {
             let json = crate::clipboard::history_json();
             object.as_mut().set_clipboard_history(QString::from(&json));
@@ -1816,28 +1727,6 @@ impl qobject::AppController {
                 }
             }
         });
-    }
-
-    pub fn check_for_updates(mut self: Pin<&mut Self>) {
-        if self.update_busy {
-            return;
-        }
-        self.as_mut().set_update_busy(true);
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let message = std::panic::catch_unwind(|| crate::updater::check_now(true))
-                .unwrap_or_else(|_| Some(tr!("App", "Couldn't check for updates. Try again.")));
-            let _ = qt.queue(move |mut object| {
-                object.as_mut().set_update_busy(false);
-                if let Some(message) = message {
-                    object.toast(QString::from(&message));
-                }
-            });
-        });
-    }
-
-    pub fn install_update(self: Pin<&mut Self>) {
-        install_update_in_background();
     }
 
     pub fn run_doctor(mut self: Pin<&mut Self>) {

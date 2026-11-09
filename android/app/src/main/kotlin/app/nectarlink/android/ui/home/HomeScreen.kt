@@ -128,8 +128,6 @@ import app.nectarlink.android.ui.theme.glassModalBlur
 import app.nectarlink.android.ui.theme.glassModalContainerColor
 import app.nectarlink.android.ui.theme.glassModalScrimColor
 import app.nectarlink.android.ui.theme.liquidGlassCard
-import app.nectarlink.android.update.AppUpdater
-import app.nectarlink.android.update.UpdateCard
 import app.nectarlink.android.webcam.WebcamSession
 import android.app.DownloadManager
 import android.content.Intent
@@ -186,7 +184,6 @@ fun HomeScreen(
     onDesk: (pcId: String) -> Unit = {},
     onRecord: (pcId: String) -> Unit,
     onWebcam: (pcId: String) -> Unit = {},
-    updater: AppUpdater,
     onSendFiles: (pcId: String, uris: List<Uri>) -> Unit,
     onSendFolder: (pcId: String, tree: Uri) -> Unit,
     onAccessChanged: () -> Unit,
@@ -569,7 +566,6 @@ fun HomeScreen(
                 }
             }
         }
-        item(key = "update_card", contentType = "update") { UpdateCard(updater) }
         if (!backgroundServiceEnabled) {
             item(key = "background_connection_off", contentType = "setup") {
                 SetupCard(

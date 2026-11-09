@@ -86,7 +86,6 @@ const BASE_CAPABILITIES: &[&str] = &[
     "media.remote",
     "link.open",
     "task.notify",
-    nectarlink_protocol::messages::UPDATE_HINT,
     nectarlink_protocol::messages::mirror::PACE,
 ];
 
@@ -161,9 +160,6 @@ pub(crate) struct Shared {
     /// Each paired device's LocalSend fingerprint, from its hello: the
     /// LocalSend nearby list leaves those devices out.
     paired_localsend: Mutex<HashMap<DeviceId, String>>,
-    /// The newest build this device heard of, per channel (`announce_update`),
-    /// for peers that connect later.
-    update_hints: Mutex<HashMap<String, String>>,
     /// The running mDNS's task and whether it asks often (`install_mdns`);
     /// `None` without LAN discovery.
     lan_discovery: Mutex<Option<(CancellationToken, bool)>>,
@@ -1283,7 +1279,6 @@ impl Shared {
             crate::actions::send_wake_info(&shared, &s).await;
             crate::actions::send_active_tasks(&shared, &s).await;
             shared.send_deck(&s).await;
-            shared.send_update_hints(&s).await;
         });
         Some(session)
     }
@@ -1368,20 +1363,6 @@ impl Shared {
     }
 
     /// Sends a message to every connected device.
-    /// Tells `session`'s peer of the newest builds this device heard of.
-    async fn send_update_hints(&self, session: &Session) {
-        if !self.offers(&session.peer, nectarlink_protocol::messages::UPDATE_HINT).unwrap_or(false) {
-            return;
-        }
-        let hints: Vec<(String, String)> = lock(&self.update_hints).clone().into_iter().collect();
-        for (channel, version) in hints {
-            let hint = nectarlink_protocol::messages::UpdateHint { channel, version };
-            if let Ok(env) = Envelope::new(types::EVENT_UPDATE, &hint) {
-                let _ = session.send(env).await;
-            }
-        }
-    }
-
     async fn broadcast(&self, env: Envelope) {
         for session in self.live_sessions() {
             if let Err(e) = session.send(env.clone()).await {
@@ -1683,7 +1664,6 @@ impl Node {
             discovered: Mutex::new(HashMap::new()),
             lan_seen: Mutex::new(HashMap::new()),
             paired_localsend: Mutex::new(HashMap::new()),
-            update_hints: Mutex::new(HashMap::new()),
             lan_discovery: Mutex::new(None),
             incoming_turns: Mutex::new(HashMap::new()),
             dial_failures: Mutex::new(HashMap::new()),
@@ -3696,29 +3676,6 @@ impl Node {
         };
         if changed && let Ok(env) = Envelope::new(types::EVENT_BATTERY, &battery) {
             self.shared.broadcast(env).await;
-        }
-    }
-
-    /// Tells connected devices, and ones that connect later, that `version`
-    /// of NectarLink is out on `channel` ("stable" or "nightly"), so they can
-    /// check without polling themselves. Only devices that take hints get it;
-    /// a hint that isn't new for its channel isn't sent again.
-    pub async fn announce_update(&self, channel: String, version: String) {
-        let Some(hint) = nectarlink_protocol::messages::UpdateHint { channel, version }.sanitized() else {
-            return;
-        };
-        let new = lock(&self.shared.update_hints).insert(hint.channel.clone(), hint.version.clone()).as_ref()
-            != Some(&hint.version);
-        if !new {
-            return;
-        }
-        let Ok(env) = Envelope::new(types::EVENT_UPDATE, &hint) else { return };
-        for session in self.shared.live_sessions() {
-            if self.shared.offers(&session.peer, nectarlink_protocol::messages::UPDATE_HINT).unwrap_or(false)
-                && let Err(e) = session.send(env.clone()).await
-            {
-                tracing::debug!(peer = %session.peer.short(), error = %e, "update hint not sent");
-            }
         }
     }
 

@@ -18,7 +18,6 @@ mod continuity_camera;
 mod core_host;
 mod deck;
 mod doctor;
-mod feed;
 mod folder_sync;
 mod hotspot;
 mod i18n;
@@ -56,8 +55,6 @@ mod startup;
 mod state;
 mod storage;
 mod transfers;
-mod update_relay;
-mod updater;
 mod version;
 mod webcam;
 #[cfg(windows)]
@@ -232,8 +229,6 @@ struct Options {
     data_dir: Option<PathBuf>,
     /// Start in the tray without opening the window (autostart).
     minimized: bool,
-    /// Started by the updater's relauncher, as the new version.
-    updated: bool,
     /// `--send-to <device> <files…>`: Explorer's "Send to" menu.
     send_to: Option<(String, Vec<PathBuf>)>,
     /// `--share <targets…>`: Windows Share sheet or CLI share invocation.
@@ -253,8 +248,6 @@ struct Options {
     register_package: bool,
     /// Out-of-process Windows 11 Widget Board COM server (`--widget-provider`).
     widget_provider: bool,
-    /// The update task's job, as SYSTEM (`--update-service`, see `updater`).
-    update_service: bool,
     /// The installer's window (`--setup --installer <setup.exe>`, see `setup`).
     setup: Option<PathBuf>,
     /// The uninstaller's window (`--remove [--installed <folder>]`).
@@ -323,14 +316,6 @@ fn parse_options_from<I: IntoIterator<Item = std::ffi::OsString>>(iter: I) -> Op
             Some(setup::INSTALLED_ARG) => {
                 in_share = false;
                 options.installed = args.next().map(PathBuf::from);
-            }
-            Some(updater::SERVICE_ARG) => {
-                in_share = false;
-                options.update_service = true;
-            }
-            Some(updater::UPDATED_ARG) => {
-                in_share = false;
-                options.updated = true;
             }
             Some(win::vcam::REGISTER_ARG) => {
                 in_share = false;
@@ -503,9 +488,6 @@ fn main() -> ExitCode {
         let Some(installed) = installed else { return ExitCode::FAILURE };
         return run_setup_window(setup::Mode::Remove { installed });
     }
-    if options.update_service {
-        return updater::run_service();
-    }
     if options.register_vcam {
         return match win::vcam::register_hklm() {
             Ok(()) => ExitCode::SUCCESS,
@@ -647,50 +629,11 @@ fn main() -> ExitCode {
         &settings.command_palette_hotkey,
         &settings.shelf_hotkey,
     );
-    let updated_from = updater::note_running_version(&data_dir);
-    if updated_from.is_some() {
-        let mut saved = settings::Settings::load(&data_dir);
-        if saved.ask_for_star_after_update()
-            && let Err(e) = saved.save(&data_dir)
-        {
-            tracing::warn!(error = %e, "can't save settings");
-        }
-    }
     // A test instance (own data folder) leaves the user's menu and sign-in
     // alone.
     if options.data_dir.is_none() {
         send_to::start();
         startup::start(settings.start_with_windows);
-        updater::set_auto(settings.auto_update);
-        updater::set_auto_install(settings.install_updates);
-        // Kept from the first run: going by the version alone, a nightly install
-        // would leave Nightly as soon as it took a release.
-        let channel = version::Channel::parse(&settings.update_channel).unwrap_or_else(|| {
-            let own = updater::channel();
-            let mut saved = settings::Settings::load(&data_dir);
-            saved.update_channel = own.as_str().into();
-            if let Err(e) = saved.save(&data_dir) {
-                tracing::warn!(error = %e, "can't save settings");
-            }
-            own
-        });
-        updater::set_channel(channel);
-        updater::start();
-        match (updated_from, options.updated) {
-            (Some(previous), _) => {
-                // A new version invites to try Hive again, once.
-                let mut saved = settings::Settings::load(&data_dir);
-                if std::mem::take(&mut saved.hive_invite_dismissed)
-                    && let Err(e) = saved.save(&data_dir)
-                {
-                    tracing::warn!(error = %e, "can't save settings");
-                }
-                updater::announce_update(previous, !options.minimized);
-            }
-            // Reopened by the relauncher, still on this version.
-            (None, true) => updater::announce_update_failed(!options.minimized),
-            (None, false) => {}
-        }
     }
     // Requests left while no instance was running, then this launch's own.
     for waiting in launch::drain(&data_dir) {

@@ -12,7 +12,6 @@ pub mod clipboard;
 pub mod doctor;
 pub mod elevated;
 pub mod h264;
-pub mod http;
 pub mod image;
 pub mod input;
 pub mod jumplist;

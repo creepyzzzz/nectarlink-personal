@@ -82,8 +82,6 @@ import app.nectarlink.android.photos.RecentPhotos
 import app.nectarlink.android.sms.PhoneSms
 import app.nectarlink.android.storage.PhoneStorage
 import app.nectarlink.android.toggles.PhoneToggles
-import app.nectarlink.android.update.AppUpdater
-import app.nectarlink.android.update.CheckForUpdates
 import app.nectarlink.android.core.BackgroundAccess
 import app.nectarlink.android.core.CoreState
 import app.nectarlink.android.core.Device
@@ -108,7 +106,6 @@ fun SettingsScreen(
     onUnpair: (String) -> Unit,
     onPairNew: () -> Unit,
     onAccessChanged: () -> Unit,
-    updater: AppUpdater,
     onSetStorageEnabled: (pcId: String, enabled: Boolean) -> Unit = { _, _ -> },
     onSetMicEnabled: (pcId: String, enabled: Boolean) -> Unit = { _, _ -> },
     startWithoutAsking: Set<String> = emptySet(),
@@ -1035,7 +1032,6 @@ fun SettingsScreen(
                     }
                     SettingRowDivider()
                     Text(stringResource(R.string.about_version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
-                    CheckForUpdates(updater)
                 }
             }
         }

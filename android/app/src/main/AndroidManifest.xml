@@ -64,10 +64,6 @@
     <uses-permission
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
-    <!-- Installing its own updates from GitHub releases (the user allows it once). -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- Updates of NectarLink itself without a prompt (Android 12+), when turned on in Settings. -->
-    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Calls, shown on paired PCs, with the caller's number and contact
          (asked for in the app). The call itself stays on the phone. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
@@ -200,11 +196,6 @@
 
         <receiver
             android:name=".notifications.PcNotificationPoster$DismissReceiver"
-            android:exported="false" />
-
-        <!-- Android's answers while installing an update. -->
-        <receiver
-            android:name=".update.AppUpdater$InstallResult"
             android:exported="false" />
 
         <!-- Reconnects after the phone restarts or NectarLink updates. -->

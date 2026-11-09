@@ -12,7 +12,6 @@ import app.nectarlink.android.banking.BankingPause
 import app.nectarlink.android.core.Core
 import app.nectarlink.android.elevated.Elevated
 import app.nectarlink.android.ui.Preferences
-import app.nectarlink.android.update.AppUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,9 +25,6 @@ class NectarlinkApplication : Application(), DefaultLifecycleObserver {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val core: Core by lazy { Core(this, scope) }
-
-    /** Updates from GitHub releases (release builds only). */
-    val updater: AppUpdater by lazy { AppUpdater(this) }
 
     private var pendingStopJob: Job? = null
 
@@ -60,9 +56,6 @@ class NectarlinkApplication : Application(), DefaultLifecycleObserver {
         Elevated.onChange = { core.refreshNotificationAccess() }
         Elevated.onClipboardChanged = { text, html -> core.onElevatedClipboardChanged(text, html) }
         Elevated.onSensitiveCopied = { text -> core.onElevatedSensitiveCopied(text) }
-
-        // A build the phone sees in a feed is passed on to its PCs.
-        updater.onFeedSeen = { channel, version -> core.announceUpdate(channel, version) }
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         getSharedPreferences("appearance", Context.MODE_PRIVATE)

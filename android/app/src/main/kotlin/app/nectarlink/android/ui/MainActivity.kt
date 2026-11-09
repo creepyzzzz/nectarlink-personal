@@ -224,11 +224,6 @@ class MainActivity : ComponentActivity() {
         if (app.core.state.value.status is CoreStatus.Ready) {
             app.core.refreshNotificationAccess()
         }
-        if (app.updater.enabled) {
-            // Back from allowing installs: the update the user started carries on.
-            app.updater.onAppResumed()
-            lifecycleScope.launch { app.updater.updateIfDue() }
-        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -847,7 +842,6 @@ private fun App(
                                         webcamAutoStart = false
                                         webcamPcId = id
                                     },
-                                    updater = (context.applicationContext as NectarlinkApplication).updater,
                                     onSendFiles = core::sendFiles,
                                     onSendFolder = core::sendFolder,
                                     onAccessChanged = core::refreshNotificationAccess,
@@ -945,7 +939,6 @@ private fun App(
                                     onUnpair = core::unpair,
                                     onPairNew = { pairing = true },
                                     onAccessChanged = core::refreshNotificationAccess,
-                                    updater = (context.applicationContext as NectarlinkApplication).updater,
                                     onSetStorageEnabled = core::setStorageEnabled,
                                     onSetMicEnabled = core::setMicEnabled,
                                     startWithoutAsking = startWithoutAsking,

@@ -8,33 +8,6 @@
 
 use std::cmp::Ordering;
 
-/// Which builds an install follows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Channel {
-    /// Releases only.
-    Stable,
-    /// A build from `main` every couple of hours, and releases.
-    Nightly,
-}
-
-impl Channel {
-    /// Its name in settings, feeds and logs: `stable` or `nightly`.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Channel::Stable => "stable",
-            Channel::Nightly => "nightly",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<Channel> {
-        match s.trim() {
-            "stable" => Some(Channel::Stable),
-            "nightly" => Some(Channel::Nightly),
-            _ => None,
-        }
-    }
-}
-
 /// A parsed version: its three numbers and its pre-release part, if any.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Version<'a> {
@@ -98,18 +71,6 @@ pub fn compare(a: &str, b: &str) -> Option<Ordering> {
 /// Whether `candidate` is a newer version than `current`.
 pub fn is_newer(candidate: &str, current: &str) -> bool {
     compare(candidate, current) == Some(Ordering::Greater)
-}
-
-/// The nightly build number of `1.2.3-nightly.N`.
-pub fn nightly_build(version: &str) -> Option<u32> {
-    let pre = parse(version)?.pre?;
-    let (word, n) = pre.split_once('.')?;
-    (word == "nightly").then(|| n.parse().ok()).flatten()
-}
-
-/// The channel a build belongs to: nightlies to Nightly, everything else to Stable.
-pub fn channel_of(version: &str) -> Channel {
-    if nightly_build(version).is_some() { Channel::Nightly } else { Channel::Stable }
 }
 
 #[cfg(test)]

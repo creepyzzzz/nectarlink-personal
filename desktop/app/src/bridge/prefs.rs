@@ -74,12 +74,6 @@ pub mod qobject {
         #[qproperty(bool, send_to_menu)]
         /// Start when the user signs in.
         #[qproperty(bool, start_with_windows)]
-        /// Check for updates on their own.
-        #[qproperty(bool, auto_update)]
-        /// Install a newer release by itself at a quiet moment.
-        #[qproperty(bool, install_updates)]
-        /// The update channel: "stable" or "nightly" (the build's own when unset).
-        #[qproperty(QString, update_channel)]
         /// Tell when a phone's battery is low, or full.
         #[qproperty(bool, battery_alerts)]
         /// Charge level threshold for full battery alerts (e.g. 100 or 80 for protect battery mode).
@@ -338,9 +332,6 @@ pub struct PreferencesRust {
     hold_when_locked: bool,
     send_to_menu: bool,
     start_with_windows: bool,
-    auto_update: bool,
-    install_updates: bool,
-    update_channel: QString,
     battery_alerts: bool,
     battery_full_threshold: i32,
     ui_scale: i32,
@@ -430,12 +421,6 @@ impl cxx_qt::Initialize for qobject::Preferences {
         self.as_mut().set_hold_when_locked(settings.hold_when_locked);
         crate::notifications::set_hold_when_locked(settings.hold_when_locked);
         self.as_mut().set_send_to_menu(settings.send_to_menu);
-        self.as_mut().set_auto_update(settings.auto_update);
-        self.as_mut().set_install_updates(settings.install_updates);
-        // Shown as the channel in use, whether picked or the build's own.
-        let channel =
-            crate::version::Channel::parse(&settings.update_channel).unwrap_or_else(crate::updater::channel);
-        self.as_mut().set_update_channel(QString::from(channel.as_str()));
         self.as_mut().set_battery_alerts(settings.battery_alerts);
         self.as_mut().set_battery_full_threshold(i32::from(settings.battery_full_threshold));
         self.as_mut().set_ui_scale(i32::from(settings.ui_scale));
@@ -586,26 +571,6 @@ impl cxx_qt::Initialize for qobject::Preferences {
             .on_send_to_menu_changed(|p| {
                 crate::send_to::set_enabled(p.send_to_menu);
                 p.save();
-            })
-            .release();
-        self.as_mut()
-            .on_auto_update_changed(|p| {
-                crate::updater::set_auto(p.auto_update);
-                p.save();
-            })
-            .release();
-        self.as_mut()
-            .on_install_updates_changed(|p| {
-                crate::updater::set_auto_install(p.install_updates);
-                p.save();
-            })
-            .release();
-        self.as_mut()
-            .on_update_channel_changed(|p| {
-                if let Some(channel) = crate::version::Channel::parse(&String::from(&p.update_channel)) {
-                    crate::updater::set_channel(channel);
-                    p.save();
-                }
             })
             .release();
         self.as_mut()
@@ -1135,9 +1100,6 @@ impl qobject::Preferences {
             quiet_when_locked: p.quiet_when_locked,
             hold_when_locked: p.hold_when_locked,
             send_to_menu: p.send_to_menu,
-            auto_update: p.auto_update,
-            install_updates: p.install_updates,
-            update_channel: String::from(&p.update_channel),
             battery_alerts: p.battery_alerts,
             battery_full_threshold: p.battery_full_threshold.clamp(50, 100) as u8,
             ui_scale: u16::try_from(p.ui_scale).unwrap_or(100),

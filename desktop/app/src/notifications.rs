@@ -498,14 +498,6 @@ pub fn on_toast(event: ToastEvent) {
             return;
         }
         ToastEvent::Dismissed { device, .. } if device == crate::send_to::TOAST_GROUP => return,
-        // "Update" on the update notice.
-        ToastEvent::Action { device, .. } if device == crate::updater::TOAST_GROUP => {
-            return crate::bridge::app::install_update_in_background();
-        }
-        ToastEvent::Dismissed { device, .. } if device == crate::updater::TOAST_GROUP => return,
-        ToastEvent::Opened { device, .. } if device == crate::updater::TOAST_GROUP => {
-            return crate::bridge::app::request_activation();
-        }
         // New photos: open, save or copy one.
         ToastEvent::Opened { device, key } if device == crate::photos::TOAST_GROUP => {
             return crate::photos::on_toast(key, None);

@@ -104,13 +104,6 @@ pub enum NodeEvent {
         device: DeviceId,
         battery: Battery,
     },
-    /// `device` heard of a new NectarLink build on `channel` (`event.update`):
-    /// worth checking that channel's feed now rather than at the next turn.
-    UpdateHint {
-        device: DeviceId,
-        channel: String,
-        version: String,
-    },
     Ring {
         device: DeviceId,
         on: bool,

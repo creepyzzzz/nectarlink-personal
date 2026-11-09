@@ -3424,46 +3424,9 @@ Item {
                             width: parent.width
                             iconPath: Icons.desktop
                             title: qsTr("NectarLink %1").arg(AppController.version)
-                            description: AppController.updateStatus.length > 0
-                                         ? AppController.updateStatus
-                                         : qsTr("This PC: %1").arg(AppController.deviceName)
+                            description: qsTr("This PC: %1").arg(AppController.deviceName)
                             Row {
                                 spacing: 8
-                                // The download's progress, or a spinner while its size isn't known.
-                                Rectangle {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    visible: AppController.updateBusy && AppController.updateProgress >= 0
-                                    width: 120
-                                    height: 4
-                                    radius: 2
-                                    color: Theme.surfaceContainerHighest
-                                    Accessible.role: Accessible.ProgressBar
-                                    Accessible.name: qsTr("Update download")
-                                    Rectangle {
-                                        height: parent.height
-                                        radius: parent.radius
-                                        width: parent.width * Math.max(0, Math.min(1, AppController.updateProgress))
-                                        color: Theme.primary
-                                        Behavior on width { enabled: !Theme.reduceMotion; NumberAnimation { duration: 180 } }
-                                    }
-                                }
-                                Spinner {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    visible: AppController.updateBusy && AppController.updateProgress < 0
-                                }
-                                Button {
-                                    visible: AppController.canUpdate
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    size: "sm"
-                                    variant: AppController.updateVersion.length > 0 ? "fill" : "tonal"
-                                    iconPath: Icons.refresh
-                                    enabled: !AppController.updateBusy
-                                    text: AppController.updateVersion.length > 0
-                                          ? qsTr("Update to %1").arg(AppController.updateVersion)
-                                          : qsTr("Check for updates")
-                                    onClicked: AppController.updateVersion.length > 0
-                                               ? AppController.installUpdate() : AppController.checkForUpdates()
-                                }
                                 Button {
                                     anchors.verticalCenter: parent.verticalCenter
                                     variant: "outline"
@@ -3472,52 +3435,6 @@ Item {
                                     text: qsTr("Open logs")
                                     onClicked: Qt.openUrlExternally(AppController.logsUrl())
                                 }
-                            }
-                        }
-                        Divider { width: parent.width; visible: AppController.canUpdate }
-                        ListRow {
-                            width: parent.width
-                            visible: AppController.canUpdate
-                            iconPath: Icons.refresh
-                            title: qsTr("Check for updates")
-                            description: Preferences.updateChannel === "nightly"
-                                         ? qsTr("Looks for a new build every couple of hours, and tells your phone.")
-                                         : qsTr("Looks for a new release twice a day, and tells your phone.")
-                            Toggle {
-                                label: qsTr("Check for updates")
-                                checked: Preferences.autoUpdate
-                                onToggled: (on) => Preferences.autoUpdate = on
-                            }
-                        }
-                        ListRow {
-                            width: parent.width
-                            visible: AppController.canUpdate
-                            iconPath: Icons.moon
-                            title: qsTr("Update channel")
-                            description: Preferences.updateChannel === "nightly"
-                                         ? qsTr("The newest build from every couple of hours, with the latest fixes and features, and sometimes new bugs. Back on Stable, this PC keeps its build until the next release is newer.")
-                                         : qsTr("Releases, tested and less often.")
-                            Segmented {
-                                options: [
-                                    { value: "stable", label: qsTr("Stable") },
-                                    { value: "nightly", label: qsTr("Nightly") }
-                                ]
-                                value: Preferences.updateChannel
-                                onPicked: (value) => Preferences.updateChannel = value
-                            }
-                        }
-                        ListRow {
-                            width: parent.width
-                            visible: AppController.canUpdate
-                            enabled: Preferences.autoUpdate
-                            opacity: enabled ? 1 : 0.5
-                            iconPath: Icons.download
-                            title: qsTr("Install updates automatically")
-                            description: qsTr("When nobody is using the PC and nothing is in progress.")
-                            Toggle {
-                                label: qsTr("Install updates automatically")
-                                checked: Preferences.installUpdates
-                                onToggled: (on) => Preferences.installUpdates = on
                             }
                         }
                     }

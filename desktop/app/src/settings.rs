@@ -477,16 +477,6 @@ pub struct Settings {
     /// Paired phones in Explorer's "Send to" menu.
     #[serde(alias = "send_to_menu")]
     pub send_to_menu: bool,
-    /// Check for updates on its own (installed copies).
-    #[serde(alias = "auto_update")]
-    pub auto_update: bool,
-    /// Install a newer release by itself at a quiet moment (with `auto_update`).
-    #[serde(alias = "install_updates")]
-    pub install_updates: bool,
-    /// Which builds to update to: "stable", "nightly", or empty to follow
-    /// the installed build's own channel.
-    #[serde(alias = "update_channel")]
-    pub update_channel: String,
     /// Tell when a phone's battery is low, or full.
     #[serde(alias = "battery_alerts")]
     pub battery_alerts: bool,
@@ -691,9 +681,6 @@ impl Default for Settings {
             quiet_when_locked: false,
             hold_when_locked: false,
             send_to_menu: true,
-            auto_update: true,
-            install_updates: true,
-            update_channel: String::new(),
             battery_alerts: true,
             battery_full_threshold: default_battery_full_threshold(),
             ui_scale: default_ui_scale(),
@@ -969,9 +956,6 @@ mod tests {
             quiet_when_locked: true,
             hold_when_locked: true,
             send_to_menu: false,
-            auto_update: false,
-            install_updates: false,
-            update_channel: "nightly".into(),
             battery_alerts: false,
             battery_full_threshold: 80,
             ui_scale: 125,
@@ -1101,7 +1085,6 @@ mod tests {
         }"#;
         fs::write(dir.path().join(FILE_NAME), snap_f287fb8).unwrap();
         let s = Settings::load(dir.path());
-        assert!(!s.auto_update);
         assert!(!s.battery_alerts);
         assert_eq!(s.recordings_folder, Some(PathBuf::from(r"C:\Users\Test\Recordings")));
         assert_eq!(s.recordings_format, RecordingFormat::Flac);

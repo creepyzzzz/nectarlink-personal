@@ -81,15 +81,6 @@ class ConnectionService : LifecycleService() {
                     }
                 }
         }
-        // Updates while the app is in the background (they install by themselves when
-        // allowed). AppUpdater checks at most once a day, so waking now and then is cheap.
-        lifecycleScope.launch {
-            val updater = (application as NectarlinkApplication).updater
-            while (true) {
-                runCatching { updater.updateIfDue() }.onFailure { Log.i(TAG, "update check failed", it) }
-                delay(UPDATE_WAKE_MS)
-            }
-        }
         // Pause for banking apps: follow the app in front while it's set up.
         // Screen returns end the idle wait and start a fresh resume countdown.
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.Default) {
@@ -279,7 +270,6 @@ class ConnectionService : LifecycleService() {
 
     companion object {
         private const val TAG = "Nectarlink"
-        private const val UPDATE_WAKE_MS = 6L * 3600 * 1000
         /** How often to look at the app in front while the screen is on and Pause for banking apps is set up. */
         private const val BANKING_POLL_MS = 800L
         /** Screen off, or Pause for banking apps is not set up. */

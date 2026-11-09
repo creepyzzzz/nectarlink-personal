@@ -164,8 +164,8 @@ pub enum Kind {
 pub fn kind(installed: Option<&str>, this: &str) -> Kind {
     match installed {
         None => Kind::Fresh,
-        Some(v) if crate::updater::is_newer(this, v) => Kind::Update,
-        Some(v) if crate::updater::is_newer(v, this) => Kind::Older,
+        Some(v) if crate::version::is_newer(this, v) => Kind::Update,
+        Some(v) if crate::version::is_newer(v, this) => Kind::Older,
         Some(_) => Kind::Reinstall,
     }
 }
@@ -183,7 +183,6 @@ pub enum Step {
     Closing,
     Files,
     Firewall,
-    Updates,
     Shortcuts,
     Cleanup,
 }
@@ -198,7 +197,6 @@ impl Step {
             Step::Firewall => "Allowing through Windows Firewall",
             #[cfg(target_os = "linux")]
             Step::Firewall => "Configure Linux firewall rules",
-            Step::Updates => "Setting up updates",
             Step::Shortcuts => "Adding shortcuts",
             Step::Cleanup => "Removing files",
         }
@@ -211,7 +209,6 @@ impl Step {
             Step::Closing => 0.04,
             Step::Files | Step::Cleanup => 0.10,
             Step::Firewall => 0.78,
-            Step::Updates => 0.86,
             Step::Shortcuts => 0.94,
         }
     }
@@ -229,7 +226,6 @@ pub fn parse_event(line: &str) -> Option<Event> {
         "closing" => Step::Closing,
         "files" => Step::Files,
         "firewall" => Step::Firewall,
-        "updates" => Step::Updates,
         "shortcuts" => Step::Shortcuts,
         "cleanup" => Step::Cleanup,
         _ => return None,
@@ -759,7 +755,7 @@ mod tests {
 
     #[test]
     fn steps_only_move_the_bar_forward() {
-        let order = [Step::Closing, Step::Files, Step::Firewall, Step::Updates, Step::Shortcuts];
+        let order = [Step::Closing, Step::Files, Step::Firewall, Step::Shortcuts];
         assert!(order.windows(2).all(|w| w[0].progress() < w[1].progress()));
     }
 

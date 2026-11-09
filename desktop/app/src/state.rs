@@ -35,8 +35,6 @@ impl Changes {
     pub const HISTORY: Changes = Changes(1 << 9);
     /// Apps that sent notifications, and the user's rules for them.
     pub const APPS: Changes = Changes(1 << 10);
-    /// An update was found (see crate::updater).
-    pub const UPDATE: Changes = Changes(1 << 11);
     /// A phone's text messages (kept by crate::messages).
     pub const MESSAGES: Changes = Changes(1 << 12);
     /// Mirroring a phone's screen (kept by crate::mirror).
@@ -572,8 +570,6 @@ impl AppState {
             | NodeEvent::PcAudioFrame { .. }
             | NodeEvent::CameraCaptureRequested { .. }
             | NodeEvent::CameraCaptureCancelled { .. }
-            // The updater acts on it (update_relay); nothing shows.
-            | NodeEvent::UpdateHint { .. } => Changes::NONE,
             NodeEvent::CameraCaptureReceived { .. } => Changes::TIMELINE,
             NodeEvent::ClipboardHistoryChanged => Changes::CLIPBOARD | Changes::TIMELINE,
             NodeEvent::TimelineChanged => Changes::TIMELINE,
